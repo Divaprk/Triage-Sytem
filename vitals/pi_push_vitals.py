@@ -37,11 +37,11 @@ SPO2_LOW_THRESHOLD = 85
 SPO2_HIGH_THRESHOLD = 100
 
 # Finger detection thresholds
-MIN_DC_IR_WITH_FINGER = 1000
+MIN_DC_IR_WITH_FINGER = 500
 MAX_DC_IR_NO_FINGER = 300
-MIN_AC_DC_RATIO_FOR_PULSE = 0.02
-MIN_PEAKS_REQUIRED = 3
-PEAK_CONSISTENCY_TOLERANCE = 0.3
+MIN_AC_DC_RATIO_FOR_PULSE = 0.004
+MIN_PEAKS_REQUIRED = 2
+PEAK_CONSISTENCY_TOLERANCE = 0.6
 
 # Buffer management
 MAX_BUFFER_SIZE = 200
@@ -96,6 +96,7 @@ def read_mlx90614_temperature(bus, register):
 # MAX30100 Pulse Oximeter
 m = MAX30100()
 m.enable_spo2()
+
 
 # Sliding window buffers
 ir_buffer = deque(maxlen=MAX_BUFFER_SIZE)
@@ -198,7 +199,7 @@ def calculate_spo2_ratio(red_buf, ir_buf, window=SPO2_WINDOW):
     return None, f"out_of_range({spo2:.1f})"
 
 
-def validate_with_hysteresis(current_value, last_valid, min_valid, max_valid, hold_cycles=2):
+def validate_with_hysteresis(current_value, last_valid, min_valid, max_valid, hold_cycles=10):
     """Apply hysteresis to prevent flickering between valid/None."""
     global consecutive_failures
     
@@ -226,13 +227,13 @@ def detect_heart_rate(time_buf, ir_buf, min_interval=MIN_INTERVAL, min_bpm=MIN_B
     if len(ir_recent) < 30:
         return None, "insufficient_recent_data"
     
-    window = 5
+    window = 9
     ir_filtered = np.convolve(ir_recent, np.ones(window)/window, mode='same')
     
     peaks = []
     mean_ir = np.mean(ir_filtered)
     std_ir = np.std(ir_filtered)
-    threshold = mean_ir + 0.7 * std_ir
+    threshold = mean_ir + 0.25 * std_ir
     
     for i in range(3, len(ir_filtered) - 3):
         is_peak = (ir_filtered[i] > ir_filtered[i-1] and 
@@ -354,6 +355,7 @@ try:
             else:
                 hr = None
                 spo2 = None
+
             
             # Display output
             status_icon = "?" if signal_good else "?"
@@ -403,5 +405,3 @@ finally:
         except:
             pass
     print("? Sensors shut down. Goodbye!")
-
-
